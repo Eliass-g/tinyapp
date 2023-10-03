@@ -64,3 +64,15 @@ app.post("/urls/:id/delete", (req, res) => {
   delete urlDatabase[req.params.id];
   res.redirect('/urls');
 });
+
+app.post("/urls/:id/edit", (req, res) => {
+  const longURL = req.body.longURL;
+  const id = req.params.id
+  urlDatabase[id] = longURL;
+  res.redirect(`/urls`);
+});
+
+app.post("/urls/:id/redirect", (req, res) => {
+  const id = req.params.id;
+  res.redirect(`/urls/${id}`);
+});
