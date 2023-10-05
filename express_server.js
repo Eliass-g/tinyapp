@@ -38,6 +38,10 @@ app.get("/urls", (req, res) => {
 });
 
 app.get("/urls/new", (req, res) => {
+  if (req.cookies["user_id"] === undefined) {
+    res.redirect(`/login`);
+    return;
+  }
   const user = users[req.cookies["user_id"]];
   const templateVars = {user};
   res.render("urls_new", templateVars);
@@ -50,12 +54,20 @@ app.get("/urls/:id", (req, res) => {
 });
 
 app.get("/register", (req, res) => {
+  if (req.cookies["user_id"] !== undefined) {
+    res.redirect(`/urls`);
+    return;
+  }
   const user = users[req.cookies["user_id"]];
   const templateVars = { user };
   res.render("register", templateVars);
 });
 
 app.get("/login", (req, res) => {
+  if (req.cookies["user_id"] !== undefined) {
+    res.redirect(`/urls`);
+    return;
+  }
   const user = users[req.cookies["user_id"]];
   const templateVars = { user };
   res.render("login", templateVars);
@@ -70,6 +82,10 @@ app.listen(PORT, () => {
 });
 
 app.post("/urls", (req, res) => {
+  if (req.cookies["user_id"] === undefined) {
+    res.send("Only registered users can shorten urls\n");
+    return;
+  }
   const longURL = req.body.longURL;
   const id = generateRandomString();
   urlDatabase[id] = longURL;
@@ -77,7 +93,12 @@ app.post("/urls", (req, res) => {
 });
 
 app.get("/u/:id", (req, res) => {
-  const longURL = urlDatabase[req.params.id];
+  const id = req.params.id;
+  if (urlDatabase[id] === undefined) {
+    res.status(404).send(`Shortened URL ${id} does not exist`);
+    return;
+  }
+  const longURL = urlDatabase[id];
   res.redirect(longURL);
 });
 
