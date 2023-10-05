@@ -8,17 +8,29 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser())
 
 function generateRandomString() {
-  return  Math.random().toString(36).substring(2, 8);
+  return Math.random().toString(36).substring(2, 8);
 }
 
-const users = {};
-
-const urlDatabase = {
-  "b2xVn2": "http://www.lighthouselabs.ca",
-  "9sm5xK": "http://www.google.com"
+const users = {
+  aJ48lW: {
+    id: "aJ48lW",
+    email: "example@n.ca",
+    password: "123"
+  }
 };
 
-const getUserByEmail = function(emailCheck){
+const urlDatabase = {
+  b6UTxQ: {
+    longURL: "https://www.tsn.ca",
+    userID: "aJ48lW",
+  },
+  i3BoGr: {
+    longURL: "https://www.google.ca",
+    userID: "aJ48lW",
+  },
+};
+
+const getUserByEmail = function (emailCheck) {
   for (const key in users) {
     if (users[key].email === emailCheck) {
       return users[key];
@@ -27,13 +39,29 @@ const getUserByEmail = function(emailCheck){
   return false;
 }
 
+const urlsForUser = function(id) {
+  const userURLs = {};
+  for (const key in urlDatabase) {
+    if (id === urlDatabase[key].userID) {
+      userURLs[key] = urlDatabase[key].longURL;
+    }
+  }
+  return userURLs;
+}
+
 app.get("/", (req, res) => {
   res.send("Hello!");
 });
 
 app.get("/urls", (req, res) => {
-  const user = users[req.cookies["user_id"]];
-  const templateVars = { user, urls: urlDatabase };
+  if (req.cookies["user_id"] === undefined) {
+    res.status(401).send("<html><body>Must log in order to display URLs</body></html>\n")
+    return;
+  }
+  const id = req.cookies["user_id"];
+  const user = users[id];
+  const urlData = urlsForUser(id);
+  const templateVars = { user, urls: urlData };
   res.render("urls_index", templateVars);
 });
 
@@ -43,13 +71,28 @@ app.get("/urls/new", (req, res) => {
     return;
   }
   const user = users[req.cookies["user_id"]];
-  const templateVars = {user};
+  const templateVars = { user };
   res.render("urls_new", templateVars);
 });
 
 app.get("/urls/:id", (req, res) => {
-  const user = users[req.cookies["user_id"]];
-  const templateVars = { user, id: req.params.id, longURL: urlDatabase[req.params.id] };
+  const id = req.params.id;
+  if (urlDatabase[id] === undefined) {
+    res.status(404).send(`<html><body>Shortened URL ${id} does not exist</body></html>\n`);
+    return;
+  }
+  const userID = req.cookies["user_id"];
+  if (userID === undefined) {
+    res.status(403).send(`<html><body>Must log in to access individual URL pages</body></html>\n`);
+    return;
+  }
+  const urlData = urlsForUser(userID);
+  if (urlData[id] === undefined) {
+    res.status(403).send(`<html><body>Shortened URL ${id} is forbidden</body></html>\n`);
+    return;
+  }
+  const user = users[userID];
+  const templateVars = { user, id: req.params.id, longURL: urlDatabase[req.params.id].longURL };
   res.render("urls_show", templateVars);
 });
 
@@ -83,34 +126,65 @@ app.listen(PORT, () => {
 
 app.post("/urls", (req, res) => {
   if (req.cookies["user_id"] === undefined) {
-    res.send("Only registered users can shorten urls\n");
+    res.send("<html><body>Only registered users can shorten urls</body></html>\n");
     return;
   }
   const longURL = req.body.longURL;
   const id = generateRandomString();
-  urlDatabase[id] = longURL;
+  urlDatabase[id].longURL = longURL;
   res.redirect(`/urls/${id}`);
 });
 
 app.get("/u/:id", (req, res) => {
   const id = req.params.id;
   if (urlDatabase[id] === undefined) {
-    res.status(404).send(`Shortened URL ${id} does not exist`);
+    res.status(404).send(`<html><body>Shortened URL ${id} does not exist</body></html>\n`);
     return;
   }
-  const longURL = urlDatabase[id];
+  const longURL = urlDatabase[id].longURL;
   res.redirect(longURL);
 });
 
 app.post("/urls/:id/delete", (req, res) => {
-  delete urlDatabase[req.params.id];
+  const userID = req.cookies["user_id"];
+  const id = req.params.id;
+  console.log(userID);
+  if (userID === 'undefined' || userID === undefined) {
+    console.log(userID);
+    res.status(401).send(`Must log in order to delete URL\n`);
+    return;
+  }
+  if (urlDatabase[id] === undefined) {
+    res.status(404).send("URL does not exist\n");
+    return;
+  }
+  const urlData = urlsForUser(userID);
+  if (urlData[id] === undefined) {
+    res.status(403).send("No permission to delete URL\n");
+    return;
+  }
+  delete urlDatabase[id];
   res.redirect('/urls');
 });
 
-app.post("/urls/:id/edit", (req, res) => {
-  const longURL = req.body.longURL;
+app.post("/urls/:id", (req, res) => {
+  const userID = req.cookies["user_id"];
   const id = req.params.id;
-  urlDatabase[id] = longURL;
+  if (userID === 'undefined' || userID === undefined) {
+    res.status(401).send("Must log in order to edit URL\n");
+    return;
+  }
+  if (urlDatabase[id] === undefined) {
+    res.status(404).send("URL does not exist\n");
+    return;
+  }
+  const urlData = urlsForUser(userID);
+  if (urlData[id] === undefined) {
+    res.status(403).send("No permission to edit URL\n");
+    return;
+  }
+  const longURL = req.body.longURL;
+  urlDatabase[id].longURL = longURL;
   res.redirect(`/urls`);
 });
 
@@ -123,11 +197,11 @@ app.post("/login", (req, res) => {
   const { email, password } = req.body;
   const user = getUserByEmail(email);
   if (!user) {
-    res.status(403).send("User with the email cannot be found");
+    res.status(403).send("<html><body>User with the email cannot be found</body></html>");
     return;
   }
   if (user.password !== password) {
-    res.status(403).send("Invalid password");
+    res.status(403).send("<html><body>Invalid password</body></html>");
     return;
   }
   res.cookie('user_id', user.id);
@@ -143,14 +217,14 @@ app.post("/register", (req, res) => {
   const id = generateRandomString();
   const { email, password } = req.body;
   if (getUserByEmail(email)) {
-    res.status(400).send('Email already exists');
+    res.status(400).send('<html><body>Email already exists</body></html>');
     return;
   }
   if (email === "" || password === "") {
-    res.status(400).send("Fill in email/password");
+    res.status(400).send("<html><body>Fill in email/password</body></html>");
     return;
   }
-  users[id] = {id, email, password};
+  users[id] = { id, email, password };
   res.cookie('user_id', id);
   console.log(users);
 
