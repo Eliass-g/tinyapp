@@ -48,6 +48,7 @@ app.get("/urls", (req, res) => {
   const id = req.session.user_id;
   const user = users[id];
   const urlData = urlsForUser(id);
+  console.log(user);
   const templateVars = { user, urls: urlData };
   res.render("urls_index", templateVars);
 });
@@ -118,8 +119,10 @@ app.post("/urls", (req, res) => {
   }
   const longURL = req.body.longURL;
   const id = generateRandomString();
-  urlDatabase[id].longURL = longURL;
-  urlDatabase[id].userID = req.session.user_id;
+  urlDatabase[id] = {
+    longURL: longURL,
+    userID: req.session.user_id
+  }
   res.redirect(`/urls/${id}`);
 });
 
